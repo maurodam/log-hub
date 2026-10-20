@@ -1,0 +1,61 @@
+<div hlmSidebarWrapper>
+  <hlm-sidebar collapsible="icon">
+    <div
+      hlmSidebarHeader
+      class="h-12 justify-center border-b px-3 group-data-[collapsible=icon]:px-2"
+    >
+      <a
+        routerLink="/"
+        class="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
+        <app-brand-mark />
+      </a>
+    </div>
+
+    <div hlmSidebarContent>
+      @for (section of sections(); track section.id) {
+        <div hlmSidebarGroup>
+          @if (section.label; as label) {
+            <div hlmSidebarGroupLabel>{{ label }}</div>
+          }
+          <div hlmSidebarGroupContent>
+            <ul hlmSidebarMenu>
+              @for (item of section.items; track item.path) {
+                <li hlmSidebarMenuItem>
+                  <a
+                    hlmSidebarMenuButton
+                    [routerLink]="item.path"
+                    routerLinkActive
+                    #rla="routerLinkActive"
+                    ariaCurrentWhenActive="page"
+                    [isActive]="rla.isActive"
+                    [tooltip]="item.label"
+                  >
+                    <ng-icon [name]="item.icon" />
+                    <span>{{ item.label }}</span>
+                  </a>
+                </li>
+              }
+            </ul>
+          </div>
+        </div>
+      }
+    </div>
+  </hlm-sidebar>
+
+  <main hlmSidebarInset class="h-svh min-h-0 overflow-hidden">
+    <header class="bg-background flex h-12 shrink-0 items-center gap-2 border-b px-3">
+      <button hlmSidebarTrigger></button>
+      @if (pageTitle(); as title) {
+        <span class="border-s ps-3 text-sm font-medium">{{ title }}</span>
+      }
+      <div class="ms-auto flex items-center gap-1">
+        <app-theme-menu />
+        <app-user-menu />
+      </div>
+    </header>
+    <div class="flex min-h-0 flex-1 flex-col overflow-auto p-4">
+      <router-outlet />
+    </div>
+  </main>
+</div>

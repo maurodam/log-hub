@@ -1,0 +1,28 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# .NET
+bin/
+obj/
+*.user
+.vs/
+
+# Node / Angular (web/.gitignore covers the rest)
+node_modules/
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Nx cache (spartan CLI)
+.nx/
+
+# Local notes (not published)
+docs/internal/
+
+# Test output
+TestResults/

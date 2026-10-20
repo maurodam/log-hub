@@ -1,0 +1,10 @@
+.env
+.env.*
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/.angular/
+docs/
+.vs/
+.vscode/

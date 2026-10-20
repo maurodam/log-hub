@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LogHub.Api/LogHub.Api.csproj" />
+    <Project Path="src/LogHub.Db/LogHub.Db.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LogHub.Api.Tests/LogHub.Api.Tests.csproj" />
+    <Project Path="tests/LogHub.IntegrationTests/LogHub.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

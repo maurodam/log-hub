@@ -1,0 +1,40 @@
+# Self-hosting from source: docker compose up --build
+# Production server (published image + HTTPS): docker-compose.prod.yml, see docs/deploy/self-hosted.md
+# Local development: docker compose up db (then dotnet run + ng serve)
+name: loghub
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: .
+    image: loghub:local
+    # Every LogHub setting in .env (Auth__*, Smtp__*, DataProtection__*, Alerts__*, Retention__*, ...)
+    env_file: .env
+    environment:
+      # Overrides the localhost connection string in .env (used by "dotnet run"): inside compose the database is "db".
+      ConnectionStrings__LogHub: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+    ports:
+      - "${LOGHUB_PORT:-8080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db-data:

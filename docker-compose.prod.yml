@@ -1,0 +1,57 @@
+# Production self-hosting: published LogHub image + PostgreSQL + Caddy (automatic HTTPS).
+# Needs only this file, Caddyfile and .env on the server. Guide: docs/deploy/self-hosted.md
+#   docker compose -f docker-compose.prod.yml up -d
+name: loghub
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # No published port: only LogHub reaches the database, on the internal network.
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    image: ghcr.io/maurodam/log-hub:${LOGHUB_VERSION:-latest}
+    env_file: .env
+    environment:
+      ConnectionStrings__LogHub: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      # Caddy terminates TLS and sets X-Forwarded-*. Safe only because port 8080 is not published.
+      Proxy__TrustForwardedHeaders: "true"
+    # Uncomment with DataProtection__CertificatePath=/certs/dataprotection.pfx in .env
+    # volumes:
+    #   - ./certs:/certs:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2-alpine
+    environment:
+      LOGHUB_DOMAIN: ${LOGHUB_DOMAIN:?set LOGHUB_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:

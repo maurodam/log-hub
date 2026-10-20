@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Authors>maurodam</Authors>
+    <Company>maurodam</Company>
+    <Product>LogHub</Product>
+    <RepositoryUrl>https://github.com/maurodam/log-hub</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Copyright>Copyright (c) 2026 maurodam</Copyright>
+  </PropertyGroup>
+</Project>

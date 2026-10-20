@@ -1,0 +1,6 @@
+# Reverse proxy for docker-compose.prod.yml. Caddy gets and renews a Let's Encrypt certificate
+# for LOGHUB_DOMAIN (DNS must point to this server, ports 80 and 443 open) and sets X-Forwarded-*.
+# Live tail (Server-Sent Events) works as is: Caddy flushes text/event-stream responses immediately.
+{$LOGHUB_DOMAIN} {
+	reverse_proxy app:8080
+}

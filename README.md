@@ -184,3 +184,15 @@ docker pull ghcr.io/maurodam/log-hub:latest
 ## Author
 
 [maurodam](https://github.com/maurodam)
+
+### MCP access for AI assistants
+
+- Read-only MCP tools expose event search, event details, statistics and shared signals.
+- The stateless `/mcp` endpoint requires an API key with `Read`; session cookies do not grant access.
+
+```bash
+claude mcp add --transport http loghub https://<host>/mcp --header "X-Api-Key: <key with Read>"
+```
+
+See [MCP API documentation](docs/api/v1.md#mcp-read) for filters, limits and truncation.
+Custom connectors on claude.ai require OAuth, which is not currently supported.

@@ -51,29 +51,34 @@ public static class StatsFeature
         NpgsqlDataSource dataSource,
         CancellationToken cancellationToken)
     {
+        try
+        {
+            return Results.Ok(await QueryOverviewAsync(query, bucket, user, filters, dataSource, cancellationToken));
+        }
+        catch (FilterException ex)
+        {
+            return ApiErrors.Result(StatusCodes.Status400BadRequest, ex.Message);
+        }
+    }
+
+    public static async Task<Overview> QueryOverviewAsync(EventQuery query, int? bucket, ClaimsPrincipal user,
+        EventFilterBuilder filters, NpgsqlDataSource dataSource, CancellationToken cancellationToken)
+    {
         var to = query.To ?? DateTimeOffset.UtcNow;
         var from = query.From ?? to.AddHours(-24);
         if (from >= to)
         {
-            return ApiErrors.Result(StatusCodes.Status400BadRequest, "'from' must be earlier than 'to'.");
+            throw new FilterException("'from' must be earlier than 'to'.");
         }
 
         var span = (to - from).TotalSeconds;
         var bucketSeconds = bucket is > 0 ? bucket.Value : NiceBuckets.FirstOrDefault(b => b >= span / 60, NiceBuckets[^1]);
         if (span / bucketSeconds > MaxBuckets)
         {
-            return ApiErrors.Result(StatusCodes.Status400BadRequest, $"The bucket is too small for this range (max {MaxBuckets} buckets).");
+            throw new FilterException($"The bucket is too small for this range (max {MaxBuckets} buckets).");
         }
 
-        EventFilter filter;
-        try
-        {
-            filter = await filters.BuildAsync(query with { From = from, To = to }, includeTimeRange: true, user, cancellationToken);
-        }
-        catch (FilterException ex)
-        {
-            return ApiErrors.Result(StatusCodes.Status400BadRequest, ex.Message);
-        }
+        var filter = await filters.BuildAsync(query with { From = from, To = to }, includeTimeRange: true, user, cancellationToken);
 
         var where = filter.WhereClause();
         var interval = TimeSpan.FromSeconds(bucketSeconds);
@@ -127,7 +132,7 @@ public static class StatsFeature
             parameters,
             cancellationToken: cancellationToken));
 
-        return Results.Ok(new Overview(
+        return new Overview(
             from,
             to,
             bucketSeconds,
@@ -140,7 +145,7 @@ public static class StatsFeature
             levels.Select(l => new LevelCount(LogLevels.Name(l.LevelRank), l.LevelRank, l.Count)).ToList(),
             eventTypes.Select(e => new EventTypeCount(
                 "$" + ((uint)e.EventType).ToString("X8", CultureInfo.InvariantCulture), e.MessageTemplate, e.LevelRank, e.Count)).ToList(),
-            apiKeys.Select(k => new ApiKeyCount(k.ApiKeyId, k.Title, k.Count)).ToList()));
+            apiKeys.Select(k => new ApiKeyCount(k.ApiKeyId, k.Title, k.Count)).ToList());
     }
 
     /// <summary>One point per bucket between from and to, zeros where no events.</summary>

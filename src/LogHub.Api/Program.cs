@@ -7,6 +7,7 @@ using LogHub.Api.Features.Events;
 using LogHub.Api.Features.Health;
 using LogHub.Api.Features.Ingestion;
 using LogHub.Api.Features.Retention;
+using LogHub.Api.Features.Mcp;
 using LogHub.Api.Features.Signals;
 using LogHub.Api.Features.Stats;
 using LogHub.Api.Features.Users;
@@ -53,6 +54,7 @@ try
     builder.Services.AddEvents(builder.Configuration);
     builder.Services.AddRetention(builder.Configuration);
     builder.Services.AddAlerts(builder.Configuration);
+    builder.Services.AddMcp(builder.Configuration);
 
     var app = builder.Build();
 
@@ -79,6 +81,7 @@ try
 
     app.MapHealth();
     app.MapIngestion();
+    app.MapMcpEndpoint();
 
     var api = app.MapGroup("/api/v1")
         .RequireAuthorization()

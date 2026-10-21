@@ -28,27 +28,30 @@ public static class ListEvents
         NpgsqlDataSource dataSource,
         CancellationToken cancellationToken)
     {
-        EventFilter filter;
         try
         {
-            filter = await filters.BuildAsync(query, includeTimeRange: true, user, cancellationToken);
+            var filter = await filters.BuildAsync(query, includeTimeRange: true, user, cancellationToken);
+            return Results.Ok(await QueryAsync(filter, count ?? DefaultCount, cursor, dataSource, cancellationToken));
         }
         catch (FilterException ex)
         {
             return ApiErrors.Result(StatusCodes.Status400BadRequest, ex.Message);
         }
+    }
 
+    public static async Task<EventPage> QueryAsync(EventFilter filter, int count, string? cursor, NpgsqlDataSource dataSource, CancellationToken cancellationToken)
+    {
         if (cursor is not null)
         {
             if (!TryDecodeCursor(cursor, out var after))
             {
-                return ApiErrors.Result(StatusCodes.Status400BadRequest, "The cursor is not valid.");
+                throw new FilterException("The cursor is not valid.");
             }
 
             filter.Where($"""(timestamp, id) < ({filter.Parameter(after.Timestamp)}, {filter.Parameter(after.Id)})""");
         }
 
-        var pageSize = Math.Clamp(count ?? DefaultCount, 1, MaxCount);
+        var pageSize = Math.Clamp(count, 1, MaxCount);
         var sql = new StringBuilder(EventRow.SelectColumns);
         filter.AppendWhere(sql);
         sql.Append($""" order by timestamp desc, id desc limit {filter.Parameter(pageSize + 1)}""");
@@ -64,7 +67,7 @@ public static class ListEvents
         }
 
         var nextCursor = hasMore ? EncodeCursor(rows[^1].Timestamp, rows[^1].Id) : null;
-        return Results.Ok(new EventPage(rows.ConvertAll(row => row.ToDto()), nextCursor));
+        return new EventPage(rows.ConvertAll(row => row.ToDto()), nextCursor);
     }
 
     private static string EncodeCursor(DateTime timestamp, long id) =>

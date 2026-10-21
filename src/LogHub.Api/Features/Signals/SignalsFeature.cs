@@ -31,14 +31,16 @@ public static class SignalsFeature
     }
 
     private static async Task<IResult> List(ClaimsPrincipal user, NpgsqlDataSource dataSource, CancellationToken cancellationToken)
+        => Results.Ok(await ListAsync(user.GetUserId(), dataSource, cancellationToken));
+
+    public static async Task<List<SignalDto>> ListAsync(long? userId, NpgsqlDataSource dataSource, CancellationToken cancellationToken)
     {
-        var userId = user.GetUserId();
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         var rows = await connection.QueryAsync<SignalRow>(new CommandDefinition(
             $"""{Select} where owner_id is null or owner_id = @userId order by group_name nulls last, lower(title)""",
             new { userId },
             cancellationToken: cancellationToken));
-        return Results.Ok(rows.Select(row => row.ToDto(userId)));
+        return rows.Select(row => row.ToDto(userId)).ToList();
     }
 
     private static async Task<IResult> Create(SignalInput input, ClaimsPrincipal user, NpgsqlDataSource dataSource, CancellationToken cancellationToken)

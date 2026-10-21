@@ -61,7 +61,7 @@ public static class HttpHardening
             headers["Cross-Origin-Opener-Policy"] = "same-origin";
 
             // API responses hold log data, user details and freshly created API keys: never cache them.
-            if (context.Request.Path.StartsWithSegments("/api"))
+            if (context.Request.Path.StartsWithSegments("/api") || context.Request.Path.StartsWithSegments("/mcp"))
             {
                 headers.CacheControl = "no-store";
             }

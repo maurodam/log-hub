@@ -5,7 +5,7 @@ import {
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
-import { provideRouter, withComponentInputBinding } from '@angular/router';
+import { provideRouter, withComponentInputBinding, withViewTransitions } from '@angular/router';
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 import { routes } from './app.routes';
 import { sessionInterceptor } from './core/auth/session.interceptor';
@@ -15,7 +15,18 @@ import { ThemeService } from './core/layout/theme.service';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
-    provideRouter(routes, withComponentInputBinding()),
+    provideRouter(
+      routes,
+      withComponentInputBinding(),
+      withViewTransitions({
+        skipInitialTransition: true,
+        onViewTransitionCreated: ({ transition }) => {
+          if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            transition.skipTransition();
+          }
+        },
+      }),
+    ),
     provideHttpClient(
       withInterceptors([sessionInterceptor, apiErrorInterceptor]),
       // Session cookie auth: Angular copies the XSRF-TOKEN cookie into X-XSRF-TOKEN on every

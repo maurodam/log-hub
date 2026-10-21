@@ -5,6 +5,53 @@
 
 @import '@spartan-ng/brain/hlm-tailwind-preset.css';
 
+/* Animate page content while the navigation and header stay in place. */
+:root {
+  view-transition-name: none;
+}
+
+.route-content {
+  view-transition-name: route-content;
+}
+
+::view-transition-group(route-content) {
+  animation-duration: 220ms;
+}
+
+::view-transition-old(route-content) {
+  animation: route-out 100ms ease-in both;
+}
+
+::view-transition-new(route-content) {
+  animation: route-in 180ms cubic-bezier(0.16, 1, 0.3, 1) 40ms both;
+}
+
+@keyframes route-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes route-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(route-content),
+  ::view-transition-old(route-content),
+  ::view-transition-new(route-content) {
+    animation: none;
+  }
+}
+
 /*
  * LogHub theme: cool slate neutrals with a teal accent. Dense developer-tool feel (small radius,
  * tight sidebar). Light is the default; `.dark` on <html> is toggled by core/layout/theme.service.

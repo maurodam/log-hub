@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using LogHub.Api.Features.Events;
 using LogHub.Api.Features.Signals;
 using LogHub.Api.Features.Stats;
@@ -87,7 +88,8 @@ public sealed class LogHubTools(EventFilterBuilder filters, NpgsqlDataSource dat
         SignalsFeature.ListAsync(null, dataSource, cancellationToken);
 }
 
-public sealed record McpEventPage(IReadOnlyList<McpEventDto> Events, string? NextCursor);
+public sealed record McpEventPage(IReadOnlyList<McpEventDto> Events,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? NextCursor);
 
 public sealed record McpEventDto(long Id, DateTimeOffset Timestamp, string Level, string? Message, string? Exception,
     string EventType, string? TraceId, long? ApiKeyId, JsonElement Properties)

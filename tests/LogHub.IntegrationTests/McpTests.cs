@@ -136,7 +136,7 @@ public sealed class McpTests(LogHubFixture fixture)
 
     private static JsonElement Data(CallToolResult result)
     {
-        Assert.False(result.IsError);
+        Assert.NotEqual(true, result.IsError);
         return JsonSerializer.Deserialize<JsonElement>(((TextContentBlock)Assert.Single(result.Content)).Text);
     }
 }

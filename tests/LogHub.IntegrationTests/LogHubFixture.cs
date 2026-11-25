@@ -38,7 +38,9 @@ public sealed class LogHubFixture : IAsyncLifetime
 
     private NpgsqlDataSource DataSource => dataSource ?? throw new InvalidOperationException("Fixture is not initialized.");
 
-    public async ValueTask InitializeAsync()
+    public ValueTask InitializeAsync() => InitializeAsync(schedulerSecret: null);
+
+    public async ValueTask InitializeAsync(string? schedulerSecret)
     {
         await database.StartAsync();
         var connectionString = database.GetConnectionString();
@@ -51,6 +53,8 @@ public sealed class LogHubFixture : IAsyncLifetime
             .UseSetting("Auth:AdminPassword", AdminPassword)
             .UseSetting("Auth:LoginAttemptsPerMinute", "1000")
             .UseSetting("Webhooks:AllowedGenericHosts:0", "webhook.example.test")
+            .UseSetting("LogHub:SchedulerEnabled", (schedulerSecret is not null).ToString())
+            .UseSetting("LogHub:SchedulerSecret", schedulerSecret)
             .ConfigureServices(services => services.AddHttpClient(WebhookDelivery.ClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => Webhooks)));
 

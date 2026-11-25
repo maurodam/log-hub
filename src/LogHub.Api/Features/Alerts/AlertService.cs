@@ -52,9 +52,13 @@ public sealed class AlertService(
     private readonly SemaphoreSlim running = new(1, 1);
 
     /// <summary>Checks every enabled alert now. Returns the number of emails sent, or null when another replica holds the lock.</summary>
-    public async Task<int?> RunOnceAsync(CancellationToken cancellationToken)
+    public async Task<int?> RunOnceAsync(CancellationToken cancellationToken, bool skipIfRunning = false)
     {
-        await running.WaitAsync(cancellationToken);
+        if (!await running.WaitAsync(skipIfRunning ? 0 : Timeout.Infinite, cancellationToken))
+        {
+            return null;
+        }
+
         try
         {
             await using var lockConnection = await dataSource.OpenConnectionAsync(cancellationToken);

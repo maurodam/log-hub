@@ -39,9 +39,27 @@ public sealed class RetentionService(
     public void Trigger() => triggers.Writer.TryWrite(true);
 
     /// <summary>Runs the job now and waits for it. Returns null when another replica holds the lock.</summary>
-    public async Task<RetentionRunResult?> RunOnceAsync(CancellationToken cancellationToken)
+    public Task<RetentionRunResult?> RunOnceAsync(CancellationToken cancellationToken) =>
+        RunWithLockAsync(scheduled: false, cancellationToken);
+
+    public Task<RetentionRunResult?> RunScheduledAsync(CancellationToken cancellationToken) =>
+        RunWithLockAsync(scheduled: true, cancellationToken);
+
+    public async Task RequestRunAsync(CancellationToken cancellationToken)
     {
-        await running.WaitAsync(cancellationToken);
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await connection.ExecuteAsync(new CommandDefinition(
+            "update retention_schedule set requested_version = requested_version + 1 where id = 1",
+            cancellationToken: cancellationToken));
+    }
+
+    private async Task<RetentionRunResult?> RunWithLockAsync(bool scheduled, CancellationToken cancellationToken)
+    {
+        if (!await running.WaitAsync(scheduled ? 0 : Timeout.Infinite, cancellationToken))
+        {
+            return null;
+        }
+
         try
         {
             await using var lockConnection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -55,7 +73,9 @@ public sealed class RetentionService(
 
             try
             {
-                return await RunAsync(cancellationToken);
+                return scheduled
+                    ? await RunIfDueAsync(lockConnection, cancellationToken)
+                    : await RunAsync(cancellationToken);
             }
             finally
             {
@@ -67,6 +87,28 @@ public sealed class RetentionService(
         {
             running.Release();
         }
+    }
+
+    private async Task<RetentionRunResult?> RunIfDueAsync(NpgsqlConnection connection, CancellationToken cancellationToken)
+    {
+        var version = await connection.QuerySingleOrDefaultAsync<long?>(new CommandDefinition(
+            """
+            select requested_version from retention_schedule where id = 1
+                and (requested_version > completed_version or completed_at is null
+                    or completed_at <= now() - make_interval(mins => @intervalMinutes))
+            """,
+            new { intervalMinutes = Math.Max(1, options.Value.IntervalMinutes) }, cancellationToken: cancellationToken));
+        if (version is null)
+        {
+            return null;
+        }
+
+        var result = await RunAsync(cancellationToken);
+        // A request recorded while this job ran keeps its newer version and is picked up on the next tick.
+        await connection.ExecuteAsync(new CommandDefinition(
+            "update retention_schedule set completed_version = @version, completed_at = now() where id = 1",
+            new { version }, cancellationToken: cancellationToken));
+        return result;
     }
 
     public override void Dispose()

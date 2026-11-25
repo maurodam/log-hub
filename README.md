@@ -60,6 +60,12 @@ docker compose -f docker-compose.prod.yml up -d
 
 Full guide (backups, upgrades, key ring encryption, nginx or an existing proxy): [docs/deploy/self-hosted.md](docs/deploy/self-hosted.md).
 
+## Deploy on Vercel
+
+[![Deploy to Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmaurodam%2Flog-hub&env=ConnectionStrings__LogHub,Auth__AdminPassword,LogHub__SchedulerSecret,PORT,LogHub__SchedulerEnabled,Proxy__TrustForwardedHeaders,Ingestion__MaxPayloadBytes&envDefaults=%7B%22PORT%22%3A%228080%22%2C%22LogHub__SchedulerEnabled%22%3A%22true%22%2C%22Proxy__TrustForwardedHeaders%22%3A%22true%22%2C%22Ingestion__MaxPayloadBytes%22%3A%224000000%22%7D&envDescription=Configure%20PostgreSQL%2C%20the%20initial%20admin%2C%20and%20the%20external%20scheduler.&envLink=https%3A%2F%2Fgithub.com%2Fmaurodam%2Flog-hub%2Fblob%2Fmain%2Fdocs%2Fdeploy%2Fvercel.md%231-deploy-loghub)
+
+For personal use on Vercel Hobby, bring a PostgreSQL database and set up a free Cloudflare Worker for alerts, webhooks, and retention. See the [Vercel deployment guide](docs/deploy/vercel.md).
+
 ## Send logs from a .NET application
 
 ```csharp

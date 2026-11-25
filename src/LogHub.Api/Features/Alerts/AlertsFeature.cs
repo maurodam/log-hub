@@ -12,20 +12,23 @@ public static class AlertsFeature
     /// <summary>Manual notification tests per user per minute.</summary>
     public const string TestEmailRateLimit = "test-email";
 
-    public static IServiceCollection AddAlerts(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddAlerts(this IServiceCollection services, IConfiguration configuration, bool runInBackground = true)
     {
         services.Configure<AlertOptions>(configuration.GetSection("Alerts"));
         services.Configure<WebhookOptions>(configuration.GetSection("Webhooks"));
         services.AddSingleton<WebhookEndpoints>();
         services.AddSingleton<WebhookDelivery>();
-        services.AddHostedService(provider => provider.GetRequiredService<WebhookDelivery>());
         services.AddHttpClient(WebhookDelivery.ClientName, client => client.Timeout = TimeSpan.FromSeconds(5))
             .ConfigurePrimaryHttpMessageHandler(WebhookDelivery.CreateHandler)
             .RemoveAllLoggers();
         services.AddSingleton<SmtpSettingsStore>();
         services.AddSingleton<IEmailSender, MailKitEmailSender>();
         services.AddSingleton<AlertService>();
-        services.AddHostedService(provider => provider.GetRequiredService<AlertService>());
+        if (runInBackground)
+        {
+            services.AddHostedService(provider => provider.GetRequiredService<WebhookDelivery>());
+            services.AddHostedService(provider => provider.GetRequiredService<AlertService>());
+        }
         services.AddRateLimiter(limiter => limiter.AddPolicy(TestEmailRateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
             context.User.FindFirst(LogHubClaims.UserId)?.Value ?? context.User.FindFirst(LogHubClaims.ApiKeyId)?.Value ?? "anonymous",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));

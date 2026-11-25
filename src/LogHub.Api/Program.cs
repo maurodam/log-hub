@@ -7,6 +7,7 @@ using LogHub.Api.Features.Events;
 using LogHub.Api.Features.Health;
 using LogHub.Api.Features.Ingestion;
 using LogHub.Api.Features.Retention;
+using LogHub.Api.Features.Scheduling;
 using LogHub.Api.Features.Mcp;
 using LogHub.Api.Features.Signals;
 using LogHub.Api.Features.Stats;
@@ -52,8 +53,9 @@ try
     builder.Services.AddLogHubAuthorization();
     builder.Services.AddIngestion(builder.Configuration);
     builder.Services.AddEvents(builder.Configuration);
-    builder.Services.AddRetention(builder.Configuration);
-    builder.Services.AddAlerts(builder.Configuration);
+    var scheduler = JobScheduler.FromConfiguration(builder.Configuration);
+    builder.Services.AddRetention(builder.Configuration, runInBackground: scheduler is null);
+    builder.Services.AddAlerts(builder.Configuration, runInBackground: scheduler is null);
     builder.Services.AddMcp(builder.Configuration);
 
     var app = builder.Build();
@@ -82,6 +84,7 @@ try
     app.MapHealth();
     app.MapIngestion();
     app.MapMcpEndpoint();
+    scheduler?.MapEndpoints(app);
 
     var api = app.MapGroup("/api/v1")
         .RequireAuthorization()
@@ -93,7 +96,7 @@ try
     api.MapSignals();
     api.MapApiKeys();
     api.MapUsers();
-    api.MapRetention();
+    api.MapRetention(usePersistentTrigger: scheduler is not null);
     api.MapAlerts();
 
     // Unknown API routes return 404; every other route serves the Angular app.

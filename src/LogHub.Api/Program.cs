@@ -88,6 +88,7 @@ try
         .AddEndpointFilter<ApiGuardFilter>();
     api.MapAuth();
     api.MapEvents();
+    SavedDashboardEndpoints.Map(api);
     api.MapStats();
     api.MapSignals();
     api.MapApiKeys();

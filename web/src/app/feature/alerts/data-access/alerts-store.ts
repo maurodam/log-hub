@@ -3,7 +3,7 @@ import { computed, inject, Injectable } from '@angular/core';
 import { toast } from '@spartan-ng/brain/sonner';
 import { firstValueFrom } from 'rxjs';
 import { SessionService } from '../../../core/auth/session.service';
-import { Alert, AlertInput, LookupOption, toAlertInput } from '../models/alert';
+import { Alert, AlertInput, LookupOption, toAlertInput, WebhookDestination } from '../models/alert';
 import { AlertsApi } from './alerts.api';
 
 interface SmtpStatus {
@@ -21,6 +21,10 @@ export class AlertsStore {
   private readonly canSeeSmtp = computed(() => this.session.hasPermission('System'));
 
   readonly alerts = httpResource<Alert[]>(() => (this.canRead() ? this.api.alertsUrl : undefined));
+  private readonly destinationsResource = httpResource<WebhookDestination[]>(() =>
+    this.canChange() ? this.api.destinationsUrl : undefined,
+  );
+  readonly destinations = computed(() => this.destinationsResource.hasValue() ? this.destinationsResource.value() ?? [] : []);
   private readonly signalsResource = httpResource<LookupOption[]>(() =>
     this.canRead() ? this.api.signalsUrl : undefined,
   );
@@ -64,6 +68,7 @@ export class AlertsStore {
   }
 
   refreshLookups(): void {
+    this.destinationsResource.reload();
     this.signalsResource.reload();
     this.apiKeysResource.reload();
   }
@@ -106,6 +111,15 @@ export class AlertsStore {
       toast.success('Test email sent', {
         description: `${alert.recipients.length} ${alert.recipients.length === 1 ? 'recipient' : 'recipients'} of "${alert.title}"`,
       });
+    } catch {
+      // Reported by the HTTP error interceptor.
+    }
+  }
+
+  async testWebhook(alert: Alert, destination: WebhookDestination): Promise<void> {
+    try {
+      await firstValueFrom(this.api.testWebhook(alert.id, destination.id));
+      toast.success('Webhook test queued', { description: 'Check notification history for the result.' });
     } catch {
       // Reported by the HTTP error interceptor.
     }

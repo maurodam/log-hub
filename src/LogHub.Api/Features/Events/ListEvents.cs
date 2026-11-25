@@ -39,7 +39,7 @@ public static class ListEvents
         }
     }
 
-    public static async Task<EventPage> QueryAsync(EventFilter filter, int count, string? cursor, NpgsqlDataSource dataSource, CancellationToken cancellationToken)
+    public static async Task<EventPage> QueryAsync(EventFilter filter, int count, string? cursor, NpgsqlDataSource dataSource, CancellationToken cancellationToken, int? timeoutSeconds = null)
     {
         if (cursor is not null)
         {
@@ -58,7 +58,7 @@ public static class ListEvents
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         var rows = (await connection.QueryAsync<EventRow>(
-            new CommandDefinition(sql.ToString(), filter.Parameters, cancellationToken: cancellationToken))).AsList();
+            new CommandDefinition(sql.ToString(), filter.Parameters, commandTimeout: timeoutSeconds, cancellationToken: cancellationToken))).AsList();
 
         var hasMore = rows.Count > pageSize;
         if (hasMore)

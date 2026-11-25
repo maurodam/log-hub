@@ -22,6 +22,7 @@ export interface AlertDraft {
   windowMinutes: number | null;
   suppressionMinutes: number | null;
   recipients: string[];
+  webhookDestinationIds: number[];
   isEnabled: boolean;
   /** Filter fields the editor does not show; kept as they are on save. */
   traceId: string | null;
@@ -45,6 +46,7 @@ export function emptyDraft(): AlertDraft {
     windowMinutes: 5,
     suppressionMinutes: 60,
     recipients: [],
+    webhookDestinationIds: [],
     isEnabled: true,
     traceId: null,
     eventType: null,
@@ -74,6 +76,7 @@ export function draftFromAlert(alert: Alert): AlertDraft {
     windowMinutes: alert.windowMinutes,
     suppressionMinutes: alert.suppressionMinutes,
     recipients: [...alert.recipients],
+    webhookDestinationIds: [...(alert.webhookDestinationIds ?? [])],
     isEnabled: alert.isEnabled,
     traceId: filter.traceId ?? null,
     eventType: filter.eventType ?? null,
@@ -117,6 +120,7 @@ export function draftToInput(draft: AlertDraft): AlertInput {
     windowMinutes: draft.windowMinutes ?? 5,
     suppressionMinutes: draft.suppressionMinutes ?? 0,
     recipients: [...draft.recipients],
+    webhookDestinationIds: [...draft.webhookDestinationIds],
     isEnabled: draft.isEnabled,
   };
 }

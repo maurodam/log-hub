@@ -11,6 +11,7 @@ export interface AlertInput {
   suppressionMinutes: number;
   recipients: string[];
   isEnabled: boolean;
+  webhookDestinationIds?: number[];
 }
 
 export interface Alert extends AlertInput {
@@ -27,7 +28,11 @@ export interface AlertNotification {
   triggeredDate: string;
   eventCount: number;
   recipients: string[];
-  status: 'Sent' | 'Failed';
+  status: 'Sent' | 'Failed' | 'Pending' | 'Cancelled';
+  destinationName?: string;
+  kind?: string;
+  attempts?: number;
+  isTest?: boolean;
   error: string | null;
 }
 
@@ -35,6 +40,13 @@ export interface AlertNotification {
 export interface LookupOption {
   id: number;
   title: string;
+}
+
+export interface WebhookDestination {
+  id: number;
+  name: string;
+  kind: 'teams' | 'slack' | 'generic';
+  enabled: boolean;
 }
 
 export function toAlertInput(alert: Alert): AlertInput {
@@ -48,5 +60,6 @@ export function toAlertInput(alert: Alert): AlertInput {
     suppressionMinutes: alert.suppressionMinutes,
     recipients: alert.recipients,
     isEnabled: alert.isEnabled,
+    webhookDestinationIds: alert.webhookDestinationIds,
   };
 }

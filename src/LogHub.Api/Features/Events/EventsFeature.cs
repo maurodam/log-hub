@@ -15,6 +15,7 @@ public static class EventsFeature
     {
         var events = api.MapGroup("/events").RequireAuthorization(Policies.Read);
         events.MapGet("/", ListEvents.Handle);
+        events.MapPost("/query", EventQueryEndpoints.Execute);
         events.MapGet("/stream", StreamEvents.Handle);
         events.MapGet("/{id:long}", GetEvent.Handle);
         return api;

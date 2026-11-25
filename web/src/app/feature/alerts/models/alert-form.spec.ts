@@ -94,6 +94,7 @@ describe('draftToInput', () => {
       windowMinutes: 10,
       suppressionMinutes: 0,
       recipients: ['ops@example.com'],
+      webhookDestinationIds: [],
       isEnabled: true,
     });
   });

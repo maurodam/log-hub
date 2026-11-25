@@ -73,6 +73,9 @@ docker compose -f docker-compose.prod.yml up -d
 
 **Email alerts**: `Smtp__Host`, `Smtp__Port`, `Smtp__Security`, `Smtp__Username`, `Smtp__Password`, `Smtp__FromAddress`, `Smtp__PublicUrl=https://<LOGHUB_DOMAIN>`, or configure them in *Settings → Email*.
 
+**Webhook alerts** use **Settings → Webhooks**. Set `Webhooks__PublicUrl` to the public HTTPS URL and add approved generic receiver hosts through `Webhooks__AllowedGenericHosts__0` and further indexed variables in `.env`. Configure `DataProtection__CertificatePath` to protect the database key ring and stored webhook credentials. The [provider setup and pilot checks](azure.md#5-webhook-alerts) also apply to self-hosted deployments.
+
+
 **Microsoft Entra ID sign-in**: same variables as in the [Azure guide](azure.md#3-microsoft-entra-id-sign-in-optional). Redirect URI: `https://<LOGHUB_DOMAIN>/signin-oidc`.
 
 **Encrypt the key ring**: LogHub keeps the keys that protect sessions and stored secrets in PostgreSQL. Without a certificate they are stored unencrypted (LogHub writes a warning at startup). To encrypt them:

@@ -37,7 +37,7 @@ import { Alert } from '../models/alert';
       <div>
         <h2 class="text-lg font-semibold">Alerts</h2>
         <p class="text-muted-foreground text-sm">
-          Email notifications when matching events cross a threshold.
+          Email and webhook notifications when matching events cross a threshold.
         </p>
       </div>
       @if (store.canChange() && store.sortedAlerts().length) {
@@ -126,6 +126,7 @@ export class AlertsPage {
       alert,
       signals: this.store.signals,
       apiKeys: this.store.apiKeys,
+      destinations: this.store.destinations,
       lookupsLoading: this.store.lookupsLoading,
       save: (input) => this.store.save(alert?.id ?? null, input),
     };

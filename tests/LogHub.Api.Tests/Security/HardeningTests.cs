@@ -1,7 +1,6 @@
 using LogHub.Api.Features.Alerts;
 using LogHub.Api.Features.Auth;
 using LogHub.Api.Features.Events;
-using LogHub.Api.Features.Ingestion;
 using Microsoft.Extensions.Options;
 
 namespace LogHub.Api.Tests.Security;
@@ -33,20 +32,6 @@ public class HardeningTests
         Assert.Equal(expected, new AlertOptions { AllowedRecipientDomains = domains }.IsAllowedRecipient(email));
 
     [Fact]
-    public void Event_queue_is_bounded_by_events_not_requests()
-    {
-        var queue = new EventQueue(Options.Create(new IngestionOptions { MaxQueuedEvents = 3 }));
-
-        Assert.True(queue.TryEnqueue(Batch(2)));
-        Assert.False(queue.TryEnqueue(Batch(2)));
-        Assert.True(queue.TryEnqueue(Batch(1)));
-        Assert.Equal(3, queue.PendingEvents);
-
-        queue.Release(3);
-        Assert.True(queue.TryEnqueue(Batch(10)));
-    }
-
-    [Fact]
     public void Stream_limiter_caps_open_streams_per_owner()
     {
         var limiter = new StreamLimiter(Options.Create(new EventsOptions { MaxStreamsPerUser = 2 }));
@@ -75,9 +60,4 @@ public class HardeningTests
         throttle.Reset(1, "10.0.0.1");
         Assert.False(throttle.IsBlocked(1, "10.0.0.1"));
     }
-
-    private static IngestionBatch Batch(int events) =>
-        new(null, DateTimeOffset.UtcNow, Enumerable.Range(0, events)
-            .Select(_ => new IngestedEvent(DateTimeOffset.UtcNow, "Information", 2, null, "m", null, 0, null, null, null, null, null, "{}", null, null, null))
-            .ToList());
 }

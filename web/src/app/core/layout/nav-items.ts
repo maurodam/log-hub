@@ -6,6 +6,8 @@ import {
   lucideMail,
   lucideScrollText,
   lucideUsers,
+  lucideWebhook,
+  lucideSearchCode,
 } from '@ng-icons/lucide';
 
 export interface NavItem {
@@ -30,6 +32,8 @@ export const NAV_ICONS = {
   lucideBell,
   lucideKeyRound,
   lucideUsers,
+  lucideWebhook,
+  lucideSearchCode,
   lucideDatabase,
   lucideMail,
 };
@@ -49,6 +53,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     permission: 'Read',
     section: 'main',
   },
+  { label: 'Query', path: '/query', icon: 'lucideSearchCode', permission: 'Read', section: 'main' },
   { label: 'Alerts', path: '/alerts', icon: 'lucideBell', permission: 'Read', section: 'main' },
   {
     label: 'API Keys',
@@ -72,6 +77,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     section: 'settings',
   },
   { label: 'Email', path: '/email', icon: 'lucideMail', permission: 'System', section: 'settings' },
+  { label: 'Webhooks', path: '/webhooks', icon: 'lucideWebhook', permission: 'System', section: 'settings' },
 ];
 
 const SECTION_LABELS: Record<NavItem['section'], string | null> = {

@@ -1,6 +1,6 @@
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { Component, computed, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { provideIcons } from '@ng-icons/core';
 import { lucideChartColumnStacked, lucideTriangleAlert } from '@ng-icons/lucide';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -28,6 +28,7 @@ import { eventsLinkParams, TimeWindow } from '../models/dashboard-filter';
     KpiTiles,
     LevelBreakdown,
     NgTemplateOutlet,
+    RouterLink,
     TimelineChart,
     TopEventTypes,
   ],
@@ -39,6 +40,7 @@ import { eventsLinkParams, TimeWindow } from '../models/dashboard-filter';
       @if (windowLabel(); as label) {
         <span class="text-muted-foreground text-xs tabular-nums">{{ label }}</span>
       }
+      <a hlmBtn variant="outline" size="sm" routerLink="/dashboard/saved">Saved dashboards</a>
       <span class="text-muted-foreground ms-auto text-xs tabular-nums" aria-live="polite">
         @if (store.refreshFailed()) {
           <span class="text-destructive">Refresh failed.</span>

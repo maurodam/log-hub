@@ -3,6 +3,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using LogHub.Api.Common.Security;
+using Dapper;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
@@ -54,6 +55,45 @@ public class IngestionTests(LogHubFixture fixture)
         {
             Assert.Equal(7, properties.RootElement.GetProperty("Order").GetProperty("Id").GetInt32());
         }
+    }
+
+    [Fact]
+    public async Task Acknowledged_batch_is_visible_immediately_and_failed_copy_is_atomic()
+    {
+        var (key, token) = await fixture.CreateApiKeyAsync([Permissions.Ingest]);
+        var now = DateTimeOffset.UtcNow;
+        var marker = Guid.NewGuid().ToString("N");
+        var valid = TestApi.Clef(now, "valid", marker);
+        var invalid = $$"""{"@t":"{{now:O}}","@m":"invalid","p":"bad\u0000value"}""";
+        using var rejected = await PostAsync("/api/events/raw", valid + "\n" + invalid, token);
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        await using var db = await fixture.DataSource().OpenConnectionAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(0, await db.ExecuteScalarAsync<int>("select count(*)::int from event where api_key_id = @key", new { key }));
+
+        using var accepted = await PostAsync("/api/events/raw", valid, token);
+        Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
+        Assert.Equal(1, await db.ExecuteScalarAsync<int>("select count(*)::int from event where api_key_id = @key", new { key }));
+    }
+
+    [Fact]
+    public async Task Blocked_database_commit_returns_503_and_the_sink_can_retry()
+    {
+        var (key, token) = await fixture.CreateApiKeyAsync([Permissions.Ingest]);
+        var clef = TestApi.Clef(DateTimeOffset.UtcNow, "retry after commit timeout", Guid.NewGuid().ToString("N"));
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await fixture.DataSource().OpenConnectionAsync(ct);
+        await using (var transaction = await db.BeginTransactionAsync(ct))
+        {
+            await db.ExecuteAsync(new CommandDefinition("lock table event in access exclusive mode", transaction: transaction, cancellationToken: ct));
+            using var blocked = await PostAsync("/api/events/raw", clef, token);
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, blocked.StatusCode);
+            await transaction.RollbackAsync(ct);
+        }
+
+        Assert.Equal(0, await db.ExecuteScalarAsync<int>("select count(*)::int from event where api_key_id = @key", new { key }));
+        using var retry = await PostAsync("/api/events/raw", clef, token);
+        Assert.Equal(HttpStatusCode.Created, retry.StatusCode);
+        Assert.Equal(1, await db.ExecuteScalarAsync<int>("select count(*)::int from event where api_key_id = @key", new { key }));
     }
 
     [Fact]

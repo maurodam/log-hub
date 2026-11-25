@@ -21,9 +21,9 @@ I built LogHub with the help of LLM coding assistants. I designed the whole stru
 - **Seq-compatible ingestion** for `Serilog.Sinks.Seq` and other CLEF clients, with per-key minimum level (dynamic level control) and applied properties.
 - **Events**: search by text, level, time range, properties, API key, exceptions, trace and event type; live tail; inline event detail.
 - **Signals**: saved filters in a side panel (same group = OR, different groups = AND), personal or shared.
-- **Dashboard**: event volume over time, levels, top event types and top API keys for any time range and filter.
+- **Query and dashboards**: typed event expressions, grouping, aggregates, and shared dashboards with saved widgets. The overview includes event volumes, levels, top event types and sources.
 - **Retention**: delete events older than N days, for all events (drops whole daily partitions) or per signal.
-- **Email alerts**: "at least N matching events in M minutes" rules, SMTP settings, notification history.
+- **Alerts**: threshold rules with email, Microsoft Teams Workflows, Slack and signed HTTPS webhooks. Webhook deliveries are persisted and tracked per destination.
 - **Security**: local accounts and Microsoft Entra ID (OpenID Connect), roles and permissions, API keys, secure session cookies, CSRF protection, login rate limiting and lockout, security headers.
 - **Runs anywhere**: one Docker image plus PostgreSQL; Docker Compose or Azure Container Apps.
 
@@ -76,7 +76,7 @@ Ingestion endpoints (wire-compatible with `Serilog.Sinks.Seq` and other Seq clie
 | `POST /ingest/clef` | same as above |
 
 - API key in the `X-Seq-ApiKey` header or the `?apiKey=` query parameter.
-- `201 {"MinimumLevelAccepted":null}` on success. When the API key has a minimum level, LogHub drops lower events and returns the level, so the Serilog sink lowers its own level without a redeploy.
+- `201 {"MinimumLevelAccepted":null}` after the accepted events are committed to PostgreSQL. A temporarily unavailable database returns `503` so the client can retry. When the API key has a minimum level, LogHub drops lower events and returns the level, so the Serilog sink lowers its own level without a redeploy.
 - `400` invalid payload, `401` missing or unknown key, `403` key without `Ingest` permission, `413` payload too large, `503` server busy (the sink retries).
 - Properties applied by the API key (for example `{"App":"Billing"}`) are added to every event.
 
@@ -159,7 +159,8 @@ All settings can be set with environment variables (`Section__Key`). Main ones:
 | `DataProtection__KeyVaultKeyUri` | — | encrypt the key ring with Azure Key Vault |
 | `DataProtection__CertificatePath`, `__CertificatePassword` | — | encrypt the key ring with a PFX certificate (outside Azure) |
 | `Ingestion__RequireApiKey` | true | reject events sent without a key |
-| `Ingestion__MaxQueuedEvents` / `__MaxConcurrentRequests` | 200000 / 32 | memory and concurrency limits for ingestion |
+| `Ingestion__MaxConcurrentRequests` | 32 | concurrency limit for ingestion |
+| `Webhooks__AllowedGenericHosts__0`, `Webhooks__AllowedTeamsHosts__0`, `Webhooks__PublicUrl` | — | approved generic hosts, additional approved Teams hosts, and the HTTPS address used in notification links |
 | `Smtp__Host`, `__Port`, `__Security`, `__Username`, `__Password`, `__FromAddress`, `__PublicUrl` | — | SMTP for alerts (overrides the UI settings) |
 | `Retention__DefaultDays` | — | delete events older than N days (all-events policy, read-only in the UI) |
 | `Retention__IntervalMinutes` | 60 | retention job interval |

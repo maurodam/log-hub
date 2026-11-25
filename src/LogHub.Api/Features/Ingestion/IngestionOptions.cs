@@ -10,12 +10,6 @@ public sealed class IngestionOptions
 
     public int MaxEventBytes { get; set; } = 512 * 1024;
 
-    /// <summary>Maximum number of accepted events waiting to be written (bounds memory). When reached, ingestion answers 503.</summary>
-    public int MaxQueuedEvents { get; set; } = 200_000;
-
-    /// <summary>Ingestion requests processed at the same time; others wait briefly, then get 429 (bounds request buffers).</summary>
+    /// <summary>Ingestion requests processed at the same time; others wait briefly, then get 429.</summary>
     public int MaxConcurrentRequests { get; set; } = 32;
-
-    /// <summary>Events written to PostgreSQL in one COPY operation (approximate upper bound).</summary>
-    public int WriteBatchSize { get; set; } = 5000;
 }

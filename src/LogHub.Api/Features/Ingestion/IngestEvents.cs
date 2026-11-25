@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Text.Json;
 using LogHub.Api.Common.Security;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace LogHub.Api.Features.Ingestion;
 
@@ -24,7 +25,7 @@ public static class IngestEvents
     private static async Task<IResult> Handle(
         HttpContext context,
         ApiKeyStore apiKeys,
-        EventQueue queue,
+        EventWriter writer,
         IOptions<IngestionOptions> options,
         ILogger<IngestionBatch> logger,
         CancellationToken cancellationToken)
@@ -35,27 +36,35 @@ public static class IngestEvents
 
         var token = request.Headers["X-Seq-ApiKey"].FirstOrDefault() ?? request.Query["apiKey"].FirstOrDefault();
         ApiKeyInfo? apiKey;
-        if (!string.IsNullOrEmpty(token))
+        try
         {
-            apiKey = await apiKeys.FindByTokenAsync(token, cancellationToken);
-            if (apiKey is null)
+            if (!string.IsNullOrEmpty(token))
             {
-                return Error(StatusCodes.Status401Unauthorized, "The API key is not valid.");
-            }
+                apiKey = await apiKeys.FindByTokenAsync(token, cancellationToken);
+                if (apiKey is null)
+                {
+                    return Error(StatusCodes.Status401Unauthorized, "The API key is not valid.");
+                }
 
-            if (!apiKey.Can(Permissions.Ingest))
+                if (!apiKey.Can(Permissions.Ingest))
+                {
+                    return Error(StatusCodes.Status403Forbidden, "The API key does not have the Ingest permission.");
+                }
+            }
+            else
             {
-                return Error(StatusCodes.Status403Forbidden, "The API key does not have the Ingest permission.");
+                if (settings.RequireApiKey)
+                {
+                    return Error(StatusCodes.Status401Unauthorized, "An API key is required to write events.");
+                }
+
+                apiKey = await apiKeys.FindDefaultAsync(cancellationToken);
             }
         }
-        else
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested && ex is NpgsqlException or TimeoutException)
         {
-            if (settings.RequireApiKey)
-            {
-                return Error(StatusCodes.Status401Unauthorized, "An API key is required to write events.");
-            }
-
-            apiKey = await apiKeys.FindDefaultAsync(cancellationToken);
+            logger.LogWarning("Ingestion API key lookup is unavailable");
+            return Error(StatusCodes.Status503ServiceUnavailable, "Ingestion is temporarily unavailable. Retry later.");
         }
 
         if (request.ContentLength > settings.MaxPayloadBytes)
@@ -102,9 +111,24 @@ public static class IngestEvents
             events = events.ConvertAll(e => e with { Timestamp = arrived });
         }
 
-        if (events.Count > 0 && !queue.TryEnqueue(new IngestionBatch(apiKey?.Id, arrived, events)))
+        if (events.Count > 0)
         {
-            return Error(StatusCodes.Status503ServiceUnavailable, "The server is busy. Retry later.");
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+            try
+            {
+                await writer.WriteAsync(new IngestionBatch(apiKey?.Id, arrived, events), timeout.Token);
+            }
+            catch (PostgresException ex) when (ex.SqlState.StartsWith("22", StringComparison.Ordinal))
+            {
+                return Error(StatusCodes.Status400BadRequest, "The batch contains an event that cannot be stored.");
+            }
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested
+                && ex is NpgsqlException or TimeoutException or OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Ingestion batch could not be committed for API key {ApiKeyId}", apiKey?.Id);
+                return Error(StatusCodes.Status503ServiceUnavailable, "Ingestion is temporarily unavailable. Retry later.");
+            }
         }
 
         return accepted;

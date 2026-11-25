@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Net.Http.Json;
 using Dapper;
 using LogHub.Api.Common.Security;
+using LogHub.Api.Features.Alerts.Webhooks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
@@ -27,6 +29,8 @@ public sealed class LogHubFixture : IAsyncLifetime
     private WebApplicationFactory<Program>? factory;
     private NpgsqlDataSource? dataSource;
 
+    public WebhookTestReceiver Webhooks { get; } = new();
+
     public const string AdminUsername = "admin";
     public const string AdminPassword = "Admin-Password-For-Tests-1";
 
@@ -45,7 +49,10 @@ public sealed class LogHubFixture : IAsyncLifetime
             .UseSetting("ConnectionStrings:LogHub", connectionString)
             .UseSetting("Ingestion:RequireApiKey", "true")
             .UseSetting("Auth:AdminPassword", AdminPassword)
-            .UseSetting("Auth:LoginAttemptsPerMinute", "1000"));
+            .UseSetting("Auth:LoginAttemptsPerMinute", "1000")
+            .UseSetting("Webhooks:AllowedGenericHosts:0", "webhook.example.test")
+            .ConfigureServices(services => services.AddHttpClient(WebhookDelivery.ClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => Webhooks)));
 
         _ = factory.Server;
     }
@@ -100,7 +107,7 @@ public sealed class LogHubFixture : IAsyncLifetime
         return (id, token);
     }
 
-    /// <summary>Polls until the API key has at least <paramref name="expected"/> stored events (writes are asynchronous).</summary>
+    /// <summary>Polls until the API key has at least <paramref name="expected"/> stored events (for tests using the buffered Serilog client).</summary>
     public async Task<List<StoredEvent>> WaitForEventsAsync(long apiKeyId, int expected)
     {
         var deadline = DateTime.UtcNow.AddSeconds(10);

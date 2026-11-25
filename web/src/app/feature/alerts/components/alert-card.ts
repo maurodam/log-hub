@@ -33,7 +33,7 @@ import { conditionSummary, formatSuppression } from '../models/condition-summary
   ],
   host: {
     class:
-      'bg-card ring-foreground/10 flex items-start gap-3 rounded-xl px-4 py-3 text-sm ring-1 transition-opacity',
+      'bg-card ring-foreground/10 flex flex-wrap items-start gap-3 rounded-xl px-4 py-3 text-sm ring-1 transition-opacity',
     '[class.opacity-70]': '!alert().isEnabled',
   },
   template: `
@@ -61,21 +61,24 @@ import { conditionSummary, formatSuppression } from '../models/condition-summary
         <p class="text-muted-foreground line-clamp-2 text-xs">{{ description }}</p>
       }
       <p class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-        <span class="inline-flex items-center gap-1" [hlmTooltip]="alert().recipients.join(', ')">
-          <ng-icon name="lucideUsers" />
-          {{ alert().recipients.length }}
-          {{ alert().recipients.length === 1 ? 'recipient' : 'recipients' }}
-        </span>
-        <span>
-          Last triggered:
-          @if (alert().lastTriggeredDate; as triggered) {
-            <span class="text-foreground" [hlmTooltip]="triggered | dateTime">{{
-              triggered | timeAgo
-            }}</span>
-          } @else {
-            never
-          }
-        </span>
+        @if (alert().recipients.length) {
+          <span class="inline-flex items-center gap-1" [hlmTooltip]="alert().recipients.join(', ')">
+            <ng-icon name="lucideUsers" />
+            {{ alert().recipients.length }}
+            {{ alert().recipients.length === 1 ? 'email recipient' : 'email recipients' }}
+          </span>
+          <span>
+            Last email
+            @if (alert().lastTriggeredDate; as triggered) {
+              <span class="text-foreground" [hlmTooltip]="triggered | dateTime">{{ triggered | timeAgo }}</span>
+            } @else {
+              not sent yet
+            }
+          </span>
+        }
+        @if (alert().webhookDestinationIds?.length; as count) {
+          <span>{{ count }} {{ count === 1 ? 'webhook' : 'webhooks' }}</span>
+        }
         @if (alert().lastCheckedDate; as checked) {
           <span>
             Checked <span [hlmTooltip]="checked | dateTime">{{ checked | timeAgo }}</span>
@@ -95,7 +98,7 @@ import { conditionSummary, formatSuppression } from '../models/condition-summary
       }
     </div>
 
-    <div class="flex shrink-0 items-center gap-0.5">
+    <div class="flex flex-wrap items-center gap-0.5 max-sm:basis-full max-sm:justify-end">
       @if (canChange()) {
         <button
           hlmBtn
@@ -112,6 +115,18 @@ import { conditionSummary, formatSuppression } from '../models/condition-summary
             <ng-icon name="lucideSend" />
           }
         </button>
+      }
+      @if (canChange() && webhookOptions().length) {
+        <label class="sr-only" [attr.for]="'test-webhook-' + alert().id">Test a webhook for {{ alert().title }}</label>
+        <select #webhook [id]="'test-webhook-' + alert().id"
+                class="bg-background min-w-0 max-w-40 rounded-md border px-2 py-1 text-xs"
+                [disabled]="testing()" (change)="selectedWebhook.set(webhook.value)">
+          <option value="">Choose webhook</option>
+          @for (option of webhookOptions(); track option.id) {
+            <option [value]="option.id">{{ option.name }}</option>
+          }
+        </select>
+        <button hlmBtn variant="ghost" size="sm" [disabled]="testing() || !selectedWebhook()" (click)="runWebhookTest(webhook)">Test webhook</button>
       }
       <button
         hlmBtn
@@ -159,6 +174,23 @@ export class AlertCard {
 
   private readonly store = inject(AlertsStore);
   protected readonly testing = signal(false);
+  protected readonly selectedWebhook = signal('');
+  protected readonly webhookOptions = computed(() => this.store.destinations().filter(
+    (destination) => destination.enabled && this.alert().webhookDestinationIds?.includes(destination.id),
+  ));
+
+  protected async runWebhookTest(select: HTMLSelectElement): Promise<void> {
+    const destination = this.webhookOptions().find((option) => option.id === Number(select.value));
+    if (!destination) return;
+    this.testing.set(true);
+    try {
+      await this.store.testWebhook(this.alert(), destination);
+    } finally {
+      this.testing.set(false);
+      select.value = '';
+      this.selectedWebhook.set('');
+    }
+  }
 
   protected readonly summary = computed(() =>
     conditionSummary(this.alert(), {

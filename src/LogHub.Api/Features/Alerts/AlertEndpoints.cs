@@ -18,7 +18,8 @@ public sealed record AlertInput(
     int WindowMinutes = 5,
     int SuppressionMinutes = 60,
     string[]? Recipients = null,
-    bool IsEnabled = true);
+    bool IsEnabled = true,
+    long[]? WebhookDestinationIds = null);
 
 public sealed record AlertDto(
     long Id,
@@ -33,7 +34,8 @@ public sealed record AlertDto(
     bool IsEnabled,
     DateTime? LastCheckedDate,
     DateTime? LastTriggeredDate,
-    string? LastError);
+    string? LastError,
+    long[] WebhookDestinationIds);
 
 /// <summary>Alert email history. Init properties (not positional): Dapper reads text[] columns only into properties.</summary>
 public sealed record NotificationDto
@@ -51,6 +53,16 @@ public sealed record NotificationDto
     public string Status { get; init; } = string.Empty;
 
     public string? Error { get; init; }
+
+    public string? DestinationName { get; init; }
+
+    public string? Kind { get; init; }
+
+    public long? DeliveryId { get; init; }
+
+    public int? Attempts { get; init; }
+
+    public bool IsTest { get; init; }
 }
 
 /// <summary>Row read by Dapper from the alert table.</summary>
@@ -58,7 +70,7 @@ public sealed class AlertRow
 {
     public const string Columns = """
         id, title, description, signal_id, filter::text as filter, threshold, window_minutes, suppression_minutes,
-        recipients, is_enabled, last_checked_date, last_triggered_date, last_error
+        recipients, is_enabled, last_checked_date, last_triggered_date, last_error, webhook_destination_ids
         """;
 
     public long Id { get; init; }
@@ -81,6 +93,8 @@ public sealed class AlertRow
 
     public bool IsEnabled { get; init; }
 
+    public long[] WebhookDestinationIds { get; init; } = [];
+
     public DateTime? LastCheckedDate { get; init; }
 
     public DateTime? LastTriggeredDate { get; init; }
@@ -91,7 +105,7 @@ public sealed class AlertRow
 
     public AlertDto ToDto() => new(
         Id, Title, Description, SignalId, ParseFilter(), Threshold, WindowMinutes, SuppressionMinutes, Recipients, IsEnabled,
-        LastCheckedDate, LastTriggeredDate, LastError);
+        LastCheckedDate, LastTriggeredDate, LastError, WebhookDestinationIds);
 }
 
 /// <summary>/api/v1/alerts: CRUD (Project), list and history (Read), test email (Project).</summary>
@@ -118,7 +132,7 @@ public static class AlertEndpoints
         IOptions<AlertOptions> options,
         CancellationToken cancellationToken)
     {
-        var (alert, error) = await ValidateAsync(input, user, filters, options.Value, cancellationToken);
+        var (alert, error) = await ValidateAsync(input, user, filters, options.Value, dataSource, cancellationToken);
         if (alert is null)
         {
             return error!;
@@ -128,9 +142,9 @@ public static class AlertEndpoints
         var row = await connection.QuerySingleAsync<AlertRow>(new CommandDefinition(
             $"""
             insert into alert (title, description, signal_id, filter, threshold, window_minutes, suppression_minutes,
-                               recipients, is_enabled, user_created_id)
+                               recipients, is_enabled, user_created_id, webhook_destination_ids)
             values (@Title, @Description, @SignalId, @Filter::jsonb, @Threshold, @WindowMinutes, @SuppressionMinutes,
-                    @Recipients, @IsEnabled, @UserId)
+                    @Recipients, @IsEnabled, @UserId, @WebhookDestinationIds)
             returning {AlertRow.Columns}
             """,
             Parameters(alert, user),
@@ -148,7 +162,15 @@ public static class AlertEndpoints
         IOptions<AlertOptions> options,
         CancellationToken cancellationToken)
     {
-        var (alert, error) = await ValidateAsync(input, user, filters, options.Value, cancellationToken);
+        var existing = await FindAsync(id, dataSource, cancellationToken);
+        if (existing is null)
+        {
+            return Results.NotFound();
+        }
+
+        var preserveDestinations = input.WebhookDestinationIds is null;
+        input = input with { WebhookDestinationIds = input.WebhookDestinationIds ?? existing.WebhookDestinationIds };
+        var (alert, error) = await ValidateAsync(input, user, filters, options.Value, dataSource, cancellationToken);
         if (alert is null)
         {
             return error!;
@@ -156,6 +178,7 @@ public static class AlertEndpoints
 
         var parameters = Parameters(alert, user);
         parameters.Add("Id", id);
+        parameters.Add("PreserveDestinations", preserveDestinations);
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         var row = await connection.QuerySingleOrDefaultAsync<AlertRow>(new CommandDefinition(
@@ -163,7 +186,8 @@ public static class AlertEndpoints
             update alert
             set title = @Title, description = @Description, signal_id = @SignalId, filter = @Filter::jsonb,
                 threshold = @Threshold, window_minutes = @WindowMinutes, suppression_minutes = @SuppressionMinutes,
-                recipients = @Recipients, is_enabled = @IsEnabled, user_updated_id = @UserId, user_updated_date = now()
+                recipients = @Recipients, is_enabled = @IsEnabled, user_updated_id = @UserId, user_updated_date = now(),
+                webhook_destination_ids = case when @PreserveDestinations then webhook_destination_ids else @WebhookDestinationIds end
             where id = @Id
             returning {AlertRow.Columns}
             """,
@@ -193,6 +217,11 @@ public static class AlertEndpoints
         if (alert is null)
         {
             return Results.NotFound();
+        }
+
+        if (alert.Recipients.Length == 0)
+        {
+            return ApiErrors.Result(StatusCodes.Status400BadRequest, "This alert has no email recipients.");
         }
 
         AlertNotification notification;
@@ -226,9 +255,13 @@ public static class AlertEndpoints
 
         var notifications = await connection.QueryAsync<NotificationDto>(new CommandDefinition(
             """
-            select id, alert_id, triggered_date, event_count, recipients, status, error
-            from notification
-            where alert_id = @id
+            select id, alert_id, triggered_date, event_count, recipients, status, error,
+                null::varchar as destination_name, null::varchar as kind, null::bigint as delivery_id, null::int as attempts, false as is_test
+            from notification where alert_id = @id
+            union all
+            select -id, alert_id, created_at, event_count, array[]::text[], status, error,
+                destination_name, kind, id, attempts, is_test
+            from webhook_delivery where alert_id = @id
             order by triggered_date desc, id desc
             limit @limit
             """,
@@ -251,6 +284,7 @@ public static class AlertEndpoints
         ClaimsPrincipal user,
         EventFilterBuilder filters,
         AlertOptions options,
+        NpgsqlDataSource dataSource,
         CancellationToken cancellationToken)
     {
         static (AlertInput?, IResult?) Invalid(string message) => (null, ApiErrors.Result(StatusCodes.Status400BadRequest, message));
@@ -286,9 +320,10 @@ public static class AlertEndpoints
             .Select(recipient => recipient?.Trim() ?? string.Empty)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        if (recipients.Length is < 1 or > MaxRecipients)
+        var destinations = (input.WebhookDestinationIds ?? []).Distinct().ToArray();
+        if (recipients.Length == 0 && destinations.Length == 0 || recipients.Length > MaxRecipients)
         {
-            return Invalid($"recipients must contain between 1 and {MaxRecipients} email addresses.");
+            return Invalid($"Provide an email recipient or a webhook destination. At most {MaxRecipients} email recipients are allowed.");
         }
 
         if (recipients.FirstOrDefault(recipient => !EmailAddress.IsValid(recipient)) is { } invalid)
@@ -299,6 +334,23 @@ public static class AlertEndpoints
         if (recipients.FirstOrDefault(recipient => !options.IsAllowedRecipient(recipient)) is { } outside)
         {
             return Invalid($"'{outside}' is outside the allowed domains ({string.Join(", ", options.AllowedRecipientDomains)}).");
+        }
+
+        if (destinations.Length > 20)
+        {
+            return Invalid("At most 20 webhook destinations are allowed.");
+        }
+
+        if (destinations.Length > 0)
+        {
+            await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+            var matches = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+                "select count(*)::int from webhook_destination where id = any(@destinations)",
+                new { destinations }, cancellationToken: cancellationToken));
+            if (matches != destinations.Length)
+            {
+                return Invalid("A webhook destination does not exist.");
+            }
         }
 
         var filter = input.Filter ?? new FilterSpec();
@@ -317,7 +369,7 @@ public static class AlertEndpoints
             return Invalid("The signal does not exist.");
         }
 
-        return (input with { Title = title, Description = description, Filter = filter, Recipients = recipients }, null);
+        return (input with { Title = title, Description = description, Filter = filter, Recipients = recipients, WebhookDestinationIds = destinations }, null);
     }
 
     private static DynamicParameters Parameters(AlertInput alert, ClaimsPrincipal user)
@@ -331,6 +383,7 @@ public static class AlertEndpoints
         parameters.Add("WindowMinutes", alert.WindowMinutes);
         parameters.Add("SuppressionMinutes", alert.SuppressionMinutes);
         parameters.Add("Recipients", alert.Recipients ?? []);
+        parameters.Add("WebhookDestinationIds", alert.WebhookDestinationIds ?? []);
         parameters.Add("IsEnabled", alert.IsEnabled);
         parameters.Add("UserId", user.GetUserId());
         return parameters;

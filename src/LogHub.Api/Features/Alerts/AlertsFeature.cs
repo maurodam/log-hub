@@ -1,19 +1,27 @@
 using System.Threading.RateLimiting;
 using LogHub.Api.Common.Security;
 using LogHub.Api.Features.Alerts.Email;
+using LogHub.Api.Features.Alerts.Webhooks;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace LogHub.Api.Features.Alerts;
 
-/// <summary>Email alerts, notification history and SMTP settings. See docs/api/v1.md (Email notifications).</summary>
+/// <summary>Alert rules, notification history and delivery settings.</summary>
 public static class AlertsFeature
 {
-    /// <summary>Test emails per user per minute (alerts and SMTP settings).</summary>
+    /// <summary>Manual notification tests per user per minute.</summary>
     public const string TestEmailRateLimit = "test-email";
 
     public static IServiceCollection AddAlerts(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<AlertOptions>(configuration.GetSection("Alerts"));
+        services.Configure<WebhookOptions>(configuration.GetSection("Webhooks"));
+        services.AddSingleton<WebhookEndpoints>();
+        services.AddSingleton<WebhookDelivery>();
+        services.AddHostedService(provider => provider.GetRequiredService<WebhookDelivery>());
+        services.AddHttpClient(WebhookDelivery.ClientName, client => client.Timeout = TimeSpan.FromSeconds(5))
+            .ConfigurePrimaryHttpMessageHandler(WebhookDelivery.CreateHandler)
+            .RemoveAllLoggers();
         services.AddSingleton<SmtpSettingsStore>();
         services.AddSingleton<IEmailSender, MailKitEmailSender>();
         services.AddSingleton<AlertService>();
@@ -38,6 +46,7 @@ public static class AlertsFeature
         alerts.MapDelete("/{id:long}", AlertEndpoints.Delete).RequireAuthorization(Policies.Project);
         alerts.MapPost("/{id:long}/test", AlertEndpoints.Test).RequireAuthorization(Policies.Project).RequireRateLimiting(TestEmailRateLimit);
         alerts.MapGet("/{id:long}/notifications", AlertEndpoints.Notifications).RequireAuthorization(Policies.Read);
+        WebhookEndpoints.Map(api);
         return api;
     }
 }

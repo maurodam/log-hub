@@ -58,7 +58,44 @@ Use a single-tenant authority: LogHub matches pre-created users by `preferred_us
 
 Configure SMTP in *Settings → Email*, or with variables (they override the UI): `Smtp__Host`, `Smtp__Port`, `Smtp__Security` (`StartTls`), `Smtp__Username`, `Smtp__Password`, `Smtp__FromAddress`, `Smtp__PublicUrl` (`https://<loghub-host>`, used for links in emails). Azure Communication Services Email, Microsoft 365 and SendGrid all provide SMTP endpoints.
 
-## 5. Security checklist
+## 5. Webhook alerts
+
+1. Set `DataProtection__KeyVaultKeyUri` and grant the existing managed identity access to the key.
+2. Set `Webhooks__PublicUrl` to the HTTPS address of LogHub. Set `Webhooks__AllowedGenericHosts__0` and further indexed values to the exact hostnames of approved generic receivers. Use `Webhooks__AllowedTeamsHosts__0` only when an explicitly trusted Teams tenant uses a host outside the built-in Azure Logic Apps and Power Platform suffixes.
+3. In Teams Workflows, create a flow that posts to the intended channel on webhook receipt, choose the `Anyone` trigger mode where tenant policy allows it, and assign a co-owner. In Slack, install the app's Incoming Webhook in the intended channel. Treat both URLs as credentials.
+4. Add each destination under **Settings → Webhooks**, attach it to a pilot alert and run a test from the alert card. Check the notification history and confirm the message appears in each channel. A Teams workflow can accept a request and fail later while posting the card.
+5. Review failed deliveries and backlog. Run the following query on the LogHub database for a queue snapshot.
+
+```sql
+select count(*) filter (where status = 'Pending') as pending,
+       now() - min(created_at) filter (where status = 'Pending') as oldest_pending_age,
+       count(*) filter (where status = 'Failed' and created_at >= now() - interval '24 hours') as failures_24h
+from webhook_delivery;
+```
+
+## 6. Search index rollout
+
+The exception trigram index is included in the database migration. For a populated database, enumerate the leaves with `pg_partition_tree('event')` and run `CREATE INDEX CONCURRENTLY <unique_index_name> ON <leaf> USING gin (exception gin_trgm_ops)` for every leaf, including `event_default`, before deploying the new image. Run each statement separately, outside a transaction. Check `pg_index.indisvalid`, rebuild invalid indexes, and recheck for newly created partitions immediately before the migration. The parent migration attaches equivalent indexes. Schedule a maintenance window if any sizable partition still needs an index.
+
+A local PostgreSQL 17 benchmark used 1.05 million synthetic events across seven daily partitions and ten measured runs per case. For a rare exception over seven days, search p95 went from 1,736 ms to 22 ms. The common and short terms stayed under 3 ms across the seven-day window. The additional index occupied 25 MB. These figures describe the synthetic dataset and query used for the benchmark.
+
+In staging, record `EXPLAIN (ANALYZE, BUFFERS)` before and after for exception terms that are common, selective and short over 24 hours and seven days. Use representative data and compare search p95, ingestion p95, accepted events per second and total index bytes.
+
+## 7. Cost estimate
+
+Public retail pricing checked on 24 November 2026. Example for West Europe, 730 hours per month, pay as you go, before tax.
+
+| Component | Assumption | Monthly estimate |
+|---|---|---:|
+| PostgreSQL Flexible Server | Burstable B1ms at €0.0179/h and 32 GiB SSD at €0.1229/GiB | €17.00 |
+| Container Apps Consumption | One replica at 0.5 vCPU and 1 GiB. Subscription free grant available. Up to two million requests. | ≈ €12–43 |
+| Subtotal | PostgreSQL, disk and one replica | **≈ €29–60** |
+
+The Container Apps range spans all-idle and all-active billing. The public EUR API rounds the per-second rates to zero at its displayed precision. This calculation uses the same-region USD meters ($0.000034 active vCPU-second, $0.000004 idle vCPU-second and $0.000004 per GiB-second) converted by the same-region request meter ratio (€0.5027/$0.56). Budget separately for backup over the included allowance, Key Vault, telemetry, network traffic and extra replicas. Check actual active seconds and DB CPU credits during the pilot. For sustained load, quote General Purpose using the measured throughput and retention window.
+
+Seq lists Individual at $0/year for one user and 50 GB, Team at $1,090/year for up to ten users and 100 GB, and Standard at $2,990/year with unlimited users and storage. Include Seq hosting and request an EUR quote for a like-for-like annual comparison. [Azure Retail Prices API](https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices), [Azure Pricing Calculator](https://azure.microsoft.com/en-us/pricing/calculator/), [Seq pricing](https://datalust.co/Pricing).
+
+## 8. Security checklist
 
 - HTTPS only; HSTS is sent automatically outside Development.
 - Change the first administrator password at first sign-in; create named accounts, disable `admin` if not needed.

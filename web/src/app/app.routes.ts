@@ -31,11 +31,15 @@ export const routes: Routes = [
       { path: '', pathMatch: 'full', canActivate: [homeRedirectGuard], children: [] },
       // permissionGuard reads the required permission from NAV_ITEMS (core/layout/nav-items.ts).
       { path: 'events', canActivate: [permissionGuard], loadChildren: () => import('./feature/events/events.routes') },
+      { path: 'query', title: 'Query events - LogHub', canActivate: [permissionGuard],
+        loadComponent: () => import('./feature/query/query-page').then((m) => m.QueryPage) },
       { path: 'dashboard', canActivate: [permissionGuard], loadChildren: () => import('./feature/dashboard/dashboard.routes') },
       { path: 'alerts', canActivate: [permissionGuard], loadChildren: () => import('./feature/alerts/alerts.routes') },
       { path: 'apikeys', canActivate: [permissionGuard], loadChildren: () => import('./feature/apikeys/apikeys.routes') },
       { path: 'users', canActivate: [permissionGuard], loadChildren: () => import('./feature/users/users.routes') },
       { path: 'retention', canActivate: [permissionGuard], loadChildren: () => import('./feature/retention/retention.routes') },
+      { path: 'webhooks', title: 'Webhooks - LogHub', canActivate: [permissionGuard],
+        loadComponent: () => import('./feature/webhooks/webhooks-page').then((m) => m.WebhooksPage) },
       { path: 'email', canActivate: [permissionGuard], loadChildren: () => import('./feature/email/email.routes') },
       {
         path: 'forbidden',

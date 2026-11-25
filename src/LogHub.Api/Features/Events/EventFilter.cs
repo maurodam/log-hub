@@ -172,6 +172,6 @@ public sealed class EventFilter
         }
     }
 
-    private static string EscapeLike(string text) =>
+    internal static string EscapeLike(string text) =>
         text.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
 }

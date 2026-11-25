@@ -9,7 +9,7 @@ describe('visibleNavSections', () => {
   it('keeps only permitted items and drops empty sections', () => {
     const sections = visibleNavSections(only('Read'));
     expect(sections.map((s) => s.id)).toEqual(['main']);
-    expect(sections[0].items.map((i) => i.label)).toEqual(['Events', 'Dashboard', 'Alerts']);
+    expect(sections[0].items.map((i) => i.label)).toEqual(['Events', 'Dashboard', 'Query', 'Alerts']);
   });
 
   it('labels the settings section', () => {

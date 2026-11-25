@@ -18,8 +18,7 @@ public static class IngestionFeature
         }));
         services.AddMemoryCache();
         services.AddSingleton<ApiKeyStore>();
-        services.AddSingleton<EventQueue>();
-        services.AddHostedService<EventWriter>();
+        services.AddSingleton<EventWriter>();
         return services;
     }
 }

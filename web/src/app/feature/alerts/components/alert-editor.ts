@@ -14,7 +14,7 @@ import { HlmTextarea } from '@spartan-ng/helm/textarea';
 import { FieldError, showFieldError } from '../../../shared/components/field-error';
 import { MultiSelect, MultiSelectOption } from '../../../shared/components/multi-select';
 import { serverErrorMessage } from '../../../shared/utils/server-error';
-import { Alert, AlertInput, LookupOption } from '../models/alert';
+import { Alert, AlertInput, LookupOption, WebhookDestination } from '../models/alert';
 import {
   AlertDraft,
   draftFromAlert,
@@ -38,6 +38,7 @@ export interface AlertEditorContext {
   signals: Signal<readonly LookupOption[]>;
   apiKeys: Signal<readonly LookupOption[]>;
   lookupsLoading: Signal<boolean>;
+  destinations: Signal<readonly WebhookDestination[]>;
   save: (input: AlertInput) => Promise<Alert>;
 }
 
@@ -71,7 +72,7 @@ const error = (kind: string, message: string | null) => (message ? { kind, messa
     <hlm-dialog-header>
       <h2 hlmDialogTitle>{{ ctx.alert ? 'Edit alert' : 'New alert' }}</h2>
       <p hlmDialogDescription>
-        LogHub checks every minute and emails the recipients when enough matching events arrive.
+        LogHub notifies the selected destinations when enough matching events arrive.
       </p>
     </hlm-dialog-header>
 
@@ -244,6 +245,13 @@ const error = (kind: string, message: string | null) => (message ? { kind, messa
           <app-recipients-input inputId="alert-recipients" [formField]="alertForm.recipients" />
           <app-field-error [field]="alertForm.recipients" />
         </div>
+        <div class="grid gap-1.5">
+          <span class="text-sm font-medium">Webhook destinations</span>
+          <app-multi-select label="Select webhooks" searchPlaceholder="Search destinations…"
+            emptyText="No destinations configured."
+            [options]="webhookOptions()" [selected]="model().webhookDestinationIds"
+            (selectedChange)="alertForm.webhookDestinationIds().value.set($event)" />
+        </div>
         <div class="flex items-center gap-2">
           <hlm-switch inputId="alert-enabled" [formField]="alertForm.isEnabled" />
           <label hlmLabel for="alert-enabled">Enabled</label>
@@ -302,7 +310,10 @@ export class AlertEditor {
       validate(path.suppressionMinutes, ({ value }) =>
         error('suppression', wholeNumberError(value(), 0, 'The quiet period')),
       );
-      validate(path.recipients, ({ value }) => error('recipients', recipientsError(value())));
+      validate(path.recipients, ({ value, valueOf }) =>
+        error('recipients', value().length ? recipientsError(value()) :
+          valueOf(path.webhookDestinationIds).length ? null : 'Add an email recipient or a webhook destination.'),
+      );
       validate(path.properties, ({ value }) =>
         error('properties', value().map(propertyRowError).find(Boolean) ?? null),
       );
@@ -310,6 +321,15 @@ export class AlertEditor {
     { submission: { action: () => this.save() } },
   );
 
+  protected readonly webhookOptions = computed<MultiSelectOption[]>(() => {
+    const options = this.ctx.destinations().map(({ id, name, kind, enabled }) => ({
+      id, label: `${name} · ${kind}${enabled ? '' : ' (disabled)'}`,
+    }));
+    for (const id of this.model().webhookDestinationIds) {
+      if (!options.some((item) => item.id === id)) options.push({ id, label: `Destination #${id} (unavailable)` });
+    }
+    return options;
+  });
   protected readonly apiKeyOptions = computed<MultiSelectOption[]>(() =>
     this.ctx.apiKeys().map((key) => ({ id: key.id, label: key.title })),
   );

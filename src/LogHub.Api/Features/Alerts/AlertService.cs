@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Dapper;
 using LogHub.Api.Features.Alerts.Email;
+using LogHub.Api.Features.Alerts.Webhooks;
 using LogHub.Api.Features.Events;
 using Microsoft.Extensions.Options;
 using Npgsql;
@@ -161,7 +162,17 @@ public sealed class AlertService(
         await connection.ExecuteAsync(new CommandDefinition(
             """update alert set last_checked_date = @now where id = @id""", new { id = alert.Id, now }, cancellationToken: cancellationToken));
 
-        if (count < alert.Threshold
+        if (count < alert.Threshold)
+        {
+            return false;
+        }
+
+        if (alert.WebhookDestinationIds.Length > 0)
+        {
+            await WebhookDelivery.Enqueue(connection, alert.Id, null, count, now, cancellationToken);
+        }
+
+        if (alert.Recipients.Length == 0
             || alert.LastTriggeredDate is { } last && last > now.AddMinutes(-alert.SuppressionMinutes))
         {
             return false;

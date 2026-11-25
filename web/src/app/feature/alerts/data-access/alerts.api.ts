@@ -13,6 +13,7 @@ export class AlertsApi {
   /** GET: `Alert[]`. */
   readonly alertsUrl = `${this.apiUrl}/alerts`;
   /** GET: `Signal[]`. */
+  readonly destinationsUrl = `${this.alertsUrl}/webhook-destinations`;
   readonly signalsUrl = `${this.apiUrl}/signals`;
   /** GET: `{ id, title }[]`. */
   readonly apiKeysUrl = `${this.apiUrl}/apikeys/lookup`;
@@ -39,6 +40,10 @@ export class AlertsApi {
   /** Sends a test email to the alert recipients now. */
   test(id: number): Observable<void> {
     return this.http.post<void>(`${this.alertsUrl}/${id}/test`, null);
+  }
+
+  testWebhook(alertId: number, destinationId: number): Observable<{ deliveryId: number }> {
+    return this.http.post<{ deliveryId: number }>(`${this.alertsUrl}/${alertId}/webhooks/${destinationId}/test`, null);
   }
 
   notifications(alertId: number): Observable<AlertNotification[]> {

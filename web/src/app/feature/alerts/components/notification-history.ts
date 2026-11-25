@@ -60,7 +60,7 @@ import { Alert, AlertNotification } from '../models/alert';
             <app-empty-state
               icon="lucideHistory"
               title="No notifications yet"
-              description="Notifications appear here when the alert fires or a test email is sent."
+              description="Notifications appear here when the alert fires or a test is sent."
             />
           } @else {
             <ol class="divide-y">
@@ -74,8 +74,10 @@ import { Alert, AlertNotification } from '../models/alert';
                       >
                         Sent
                       </span>
-                    } @else {
+                    } @else if (item.status === 'Failed') {
                       <span hlmBadge variant="destructive">Failed</span>
+                    } @else {
+                      <span hlmBadge variant="outline">{{ item.status }}</span>
                     }
                     <span class="font-mono text-xs" [hlmTooltip]="item.triggeredDate | timeAgo">
                       {{ item.triggeredDate | dateTime }}
@@ -88,7 +90,12 @@ import { Alert, AlertNotification } from '../models/alert';
                     class="text-muted-foreground truncate text-xs"
                     [hlmTooltip]="item.recipients.join(', ')"
                   >
-                    To {{ item.recipients.join(', ') || 'nobody' }}
+                    @if (item.destinationName) {
+                      {{ item.destinationName }} · {{ item.kind }} · Attempts {{ item.attempts }}
+                      @if (item.isTest) { · Test }
+                    } @else {
+                      To {{ item.recipients.join(', ') }}
+                    }
                   </p>
                   @if (item.error) {
                     <p class="text-destructive font-mono text-xs break-words whitespace-pre-wrap">
